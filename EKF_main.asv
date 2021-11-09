@@ -42,9 +42,13 @@ xlabel('SOC (%)');
 ylabel('OCV (Voltage)');
 legend('Location','Best');
 
-p_SOC_OCV_map = polyfit(SOC_map,OCV_map,13); %<-- high degree yeild better percent_rms_error
+p_SOC_OCV_map = polyfit(SOC_map,OCV_map,11); %<-- high degree yeild better percent_rms_error
 p_dOCVdSOC_map = p_SOC_OCV_map(1:(end-1)).*fliplr(1:1:(length(p_SOC_OCV_map) - 1));
 
+figure();
+plot(SOC_map,polyval(p_dOCVdSOC_map,SOC_map));
+title('Verifying Slope of derivative SOC-OCV fit');
+xlabel('SOC (%)'); ylabel('dOCV/dSOC (V/%)');
 %% Finding Initial Guess of R0,R1,C1,R2,C2
 data = xlsread('INR21700_M50T_T23_HPPC_N0_W8.xlsx');
 t = data(:,2);
@@ -137,7 +141,7 @@ Q = [var_SOC,0,0,0;
 R = var_Vb;
 
 %% EKF
-%double check k indexing
+%double check k indexing in each step of the loop
 %how to deal with non-linearities? R0 > 0, 0 < SOC < 100?
 data = xlsread('INR21700_M50T_T23_HPPC_N0_W8.xlsx');
 t = data(:,2);
@@ -156,7 +160,7 @@ C2 = mean([ECM_params_ga_disch(:,5); ECM_params_ga_ch(:,5)]);
 tau1 = R1*C1;
 tau2 = R2*C2;
 
-
+max_growth = 0.05;
 num_states = 4;
 num_meas = 1;
 %initializing mean and covariance
@@ -165,48 +169,46 @@ SOC0 = 100*rand();
 mu0 = [SOC0; R0;0;0]; %Assume starting at rest --> V1_0 = 0, V2_0 = 0
 mu(:,1) = mu0;
 S = zeros(num_states,num_states,N);
-S(:,:,1) = [1,0,0,0; 
-            0,0.1,0,0;
-            0,0,0.025,0;
-            0,0,0,0.025]; %<-- most uncertain about SOC, fairly confident about R0 and extremely confident in V1 and V2
+S(:,:,1) = diag([0.1,0.01,0.001,0.001]); %<-- most uncertain about SOC, fairly confident about R0 and extremely confident in V1 and V2
+R = 1e-4;
+Q = diag([100*R,0.1*R,0.01*R,0.1*R]);
 Vb = zeros(N,1);
 for k = 2:1:N 
+    %----predict step----
     % evaluate jacobian of A and B (evaluate at mu_k-1|k-1 --> A_k-1 and B_k-1)
     dT = t(k) - t(k-1);
     Akm1 = [1,0,0,0;
-          0,1,0,0;
-          0,0,exp(-dT/tau1),0;
-          0,0,0,exp(-dT/tau2)]; %Notation: km1 = k-1
+            0,1,0,0;
+            0,0,exp(-dT/tau1),0;
+            0,0,0,exp(-dT/tau2)]; %Notation: km1 = k-1
     Bkm1 = [-dT/Qn; 0; R1*(1 - exp(-dT/tau1)); R2*(1 - exp(-dT/tau2))];%Notation: km1 = k-1
-    %----predict step----
-    mu_predict = Akm1*mu(:,k-1) + Bkm1*I(k-1); % mu_k|k-1
-    S_predict = Akm1*S(:,:,k-1)*Akm1' + Q; %S_k|k-1
-    % evaluate jacobian of C
-    if mu_predict(1) < 100 && mu_predict(1) > 0
-        dVocdSOC = polyval(p_dOCVdSOC_map,mu_predict(1));
-    else
-        dVocdSOC = 0;
-    end
-    Ck = [dVocdSOC, -I(k), -1, -1]; %Evaluate Ck at mu_k|k-1
+    % mean: mu_k|k-1
+    mu_predict = Akm1*mu(:,k-1) + Bkm1*I(k-1); 
+    %constraining R0 (Note: SOC is not constrained until after dVoc_dSOC is found
+    mu_predict(2) = growth(mu_predict(2),mu(2,k-1),max_growth);
+    %covariance: S_k|k-1
+    S_predict = Akm1*S(:,:,k-1)*Akm1' + Q; 
+
+
     %----update step----
-    K = S_predict*Ck'*inv(Ck*S_predict*Ck' + R); %Kalman Gain
+    %evaluate jacobian of C (Evaluate Ck at mu_k|k-1)
     if mu_predict(1) < 100 && mu_predict(1) > 0
-        Voc = polyval(p_SOC_OCV_map,mu_predict(1));
-    elseif mu_predict(1) > 100
-        Voc = 100;
-    elseif mu_predict(1) < 0
-        Voc = 0;
+        mu_predict(1) = saturate(mu_predict(1),0,100);
+        dVoc_dSOC = polyval(p_dOCVdSOC_map,mu_predict(1));
+    else
+        dVoc_dSOC = 0;
     end
-    mu(:,k) = mu_predict + K*(V(k) - (Voc - mu_predict(3) - mu_predict(4) - I(k)*mu_predict(2))); %Evaluate at mu_k|k-1
+    Ck = [dVoc_dSOC, -I(k), -1, -1]; 
+    %Kalman Gain
+    K = S_predict*Ck'*inv(Ck*S_predict*Ck' + R); 
+    % mean: mu_k|k
+    mu(:,k) = mu_predict + K*(V(k) - (polyval(p_SOC_OCV_map,mu_predict(1)) - mu_predict(3) - mu_predict(4) - I(k)*mu_predict(2))); %Evaluate at mu_k|k-1
+    %constraining SOC and R0
+    mu(1,k) = saturate(mu(1,k),0,100);
+    mu(2,k) = growth(mu(2,k),mu(2,k-1),max_growth);
+    %covariance: S_k|k
     S(:,:,k) = S_predict - K*Ck*S_predict; %Evaluate at S_k|k-1,Ck
-    if mu_predict(1) < 100 && mu_predict(1) > 0
-        Voc = polyval(p_SOC_OCV_map,mu(1,k));
-    elseif mu(1,k) > 100
-        Voc = 100;
-    elseif mu(1,k) < 0
-        Voc = 0;
-    end
-    Vb(k) = Voc - mu(3,k) - mu(4,k) - I(k)*mu(2,k); % yk = g(mu_k|k)
+    Vb(k) = polyval(p_SOC_OCV_map,mu(1,k)) - mu(3,k) - mu(4,k) - I(k)*mu(2,k); % yk = g(mu_k|k)
 end
 
 %Plotting voltage prediciton based on mu_k|k
@@ -409,7 +411,22 @@ function [Vb,V1,V2,percent_rmse_Vb] = simulate(param_map_ch,SOC_param_map_ch,par
     percent_rmse_Vb = sqrt((1/N)*sum((Vb - V).^2))*(100*N/sum(V));
 end
 
-function y = saturate(x,[lb,ub])
-    if x >= lb && x <= ub
-        y = xlabel
+function y = saturate(x,lb,ub)
+    if x < lb 
+        y = lb;
+    elseif x > ub
+        y = ub;
+    else
+        y = x;
+    end
+end
 
+function y = growth(x_current,x_prev,max_growth)
+    if x_current < x_prev
+        y = x_prev;
+    elseif x_current > (1 + max_growth)*x_prev
+        y = (1 + max_growth)*x_prev;
+    else
+        y = x_current;
+    end
+end
