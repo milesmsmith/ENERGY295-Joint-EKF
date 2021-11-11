@@ -172,9 +172,10 @@ mu0 = [SOC0;0;0];%Assume starting at rest --> V1_0 = 0, V2_0 = 0
 S0 = diag([0.1,0.001,0.001]);%most uncertain about SOC, fairly confident about R0 and extremely confident in V1 and V2
 %Estimating Noise Matrices
 R = 1e-4;
-% Q = diag([483.29*R,33.5980*R,0.0013*R]);
-% Q = diag([2.9764e-07,0.0034,1.3000e-07]);
-Q = diag([100*R,0.1*R,0.01*R]);
+% Q = diag([100*R,0.1*R,0.01*R]);
+Q = [1.9474        0         0; 
+         0    0.0733         0;
+         0         0    0.0171];%<-- values found in ga in next section
 [mu,S,Vb] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map);
 
 %Plotting voltage prediciton based on mu_k|k
@@ -185,7 +186,7 @@ title('Voltage vs. Time');
 xlabel('Time (sec)');
 ylabel('Voltage (V)');
 legend('Location','best');
-percent_rmse_Vb = sqrt((1/N)*sum((Vb - V).^2))*(100*N/sum(V));
+percent_rmse_Vb = calc_percent_rmse(V,Vb);
 disp(['RMS Error in Vb (EKF) = ' num2str(percent_rmse_Vb) '%']);
 
 %Plotting SOC for Coulomb Counting and EKF
@@ -196,7 +197,7 @@ title('SOC vs. Time');
 xlabel('Time (sec)');
 ylabel('SOC (%)');
 legend('Location','best');
-percent_rmse_SOC = sqrt((1/N)*sum((SOC_Coulomb_Counting - mu(1,:)').^2))*(100*N/sum(SOC_Coulomb_Counting));
+percent_rmse_SOC = calc_percent_rmse(SOC_Coulomb_Counting,mu(1,:));
 disp(['RMS Error in SOC (EKF vs. Coulomb Counting) = ' num2str(percent_rmse_SOC) '%']);
 
 %% EKF - with R0
@@ -221,22 +222,24 @@ SOC0 = rand();
 mu0 = [SOC0;0;0;R0]; %Assume starting at rest --> V1_0 = 0, V2_0 = 0
 S0 = diag([0.1,0.001,0.001,0.01]);
 
-%Finding Q and R
-num_params = 4;
-R = 1e-4;
-lb = -7*ones(num_params,1);
-ub = 7*ones(num_params,1);
-max_time = 60*10;
-[ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_R0(ga_params,R,t,V,I,SOC_Coulomb_Counting,mu0,S0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map),num_params,[],[],[],[],lb,ub,'MaxTime',max_time);
-% Initializing Noise Matricies
-Q = diag(exp(ga_param));
+% %Finding Q and R
+% num_params = 4;
 % R = 1e-4;
-% % Q = diag([483.29*R,33.5980*R,0.0013*R,0.1*R]);
-% Q = diag([1000*R,0.1*R,0.01*R,0.1*R]);
-% Q = [901.4800      0         0         0;
-%          0    0.0013         0         0;
-%          0         0    0.0009         0;
-%          0         0         0    1.6780];
+% lb = -7*ones(num_params,1);
+% ub = 7*ones(num_params,1);
+% max_time = 60*10;
+% options = optimoptions('ga','PlotFcn',@gaplotbestf,'MaxTime',max_time);
+% [ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_R0(ga_params,R,t,V,I,SOC_Coulomb_Counting,mu0,S0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map),num_params,[],[],[],[],lb,ub,[],options);
+% % Initializing Noise Matricies
+% Q = diag(exp(ga_params));
+
+R = 1e-4;
+% Q = diag([100*R,0.1*R,0.01*R,0.1*R]);
+Q = [1.9474        0         0         0;
+         0    0.0733         0         0;
+         0         0    0.0171         0;
+         0         0         0    0.0019]; %<--these values found from GA above (see GA_convergence.fig)
+
 [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map);
 
 %Plotting voltage prediciton based on mu_k|k
@@ -247,7 +250,7 @@ title('Voltage vs. Time');
 xlabel('Time (sec)');
 ylabel('Voltage (V)');
 legend('Location','best');
-percent_rmse_Vb = sqrt((1/N)*sum((Vb - V).^2))*(100*N/sum(V));
+percent_rmse_Vb = calc_percent_rmse(V,Vb);
 disp(['RMS Error in Vb (EKF) = ' num2str(percent_rmse_Vb) '%']);
 
 %Plotting SOC for Coulomb Counting and EKF
@@ -258,7 +261,7 @@ title('SOC vs. Time');
 xlabel('Time (sec)');
 ylabel('SOC (%)');
 legend('Location','best');
-percent_rmse_SOC = sqrt((1/N)*sum((SOC_Coulomb_Counting - mu(1,:)').^2))*(100*N/sum(SOC_Coulomb_Counting));
+percent_rmse_SOC = calc_percent_rmse(SOC_Coulomb_Counting,mu(1,:));
 disp(['RMS Error in SOC (EKF vs. Coulomb Counting) = ' num2str(percent_rmse_SOC) '%']);
 
 %Plotting R0 vs. time
@@ -552,8 +555,7 @@ end
 function loss = objective_function_EKF_R0(ga_params,R,t,V,I,SOC_Coulomb_Counting,mu0,S0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map)
     Q = diag(exp(ga_params));
     [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map);
-    loss = calc_percent_rmse(mu(1,:),SOC_Coulomb_Counting);
-    disp(loss);
+    loss = calc_percent_rmse(SOC_Coulomb_Counting,mu(1,:));
 end
 
 function prmse = calc_percent_rmse(x_actual,x_corrupted)
