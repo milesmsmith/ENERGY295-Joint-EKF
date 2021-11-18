@@ -20,9 +20,14 @@ OCV_map = Voc_vs_SOC(:,2);
 SOC0 = SOC_init;
 SOC_Coulomb_Counting = SOC0 - (cumtrapz(t, I)/3600)/Qn;
 
+%Making the Voltage measured input to EKF the simulated voltage (using
+%differential equations)
+% [V,V1,V2,percent_rmse_Vb] = simulate(R0_chg,R0_dischg,R0_dischg_4A,R1_chg,R1_dischg,C1_chg,C1_dischg,R2_chg,R2_dischg,C2_chg,C2_dischg,soc_chg,soc_dischg,I,V,t,Qn,SOC0,OCV_map,SOC_map);
+
+
 %Initial guess of mu and S
-SOC0 = rand();
-mu0 = [1;0;0];
+% SOC0 = rand();
+mu0 = [0.8;0;0];
 S0 = diag([0.1,0,0]);
 % S0 = diag([0.1,0.001,0.001]);
 
@@ -109,7 +114,7 @@ function [Vb,V1,V2,percent_rmse_Vb] = simulate(R0_chg,R0_dischg,R0_dischg_4A,R1_
     Q = cumtrapz(t, I)/3600; %Ah
     SOC = SOC0 - Q/Qn;
 
-    Voc = interp1(SOC_OCV_map,OCV_map,SOC);
+    Voc = interp1(SOC_map,OCV_map,SOC);
     Vb(1) = Voc(1);
 
     R0_ch = interp1(soc_chg,R0_chg,SOC);
@@ -141,7 +146,7 @@ function [Vb,V1,V2,percent_rmse_Vb] = simulate(R0_chg,R0_dischg,R0_dischg_4A,R1_
             c2 = C2_ch(i);
         else
             if I(i) > 4
-                r0 = R0_dis(i);
+                r0 = R0_dis_4A(i);
             else
                 r0 = R0_dis(i);
             end
@@ -219,7 +224,7 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
         A = [0, 0, 0;
              (C1*dR1_dSOC + R1*dC1_dSOC)/((R1*C1)^2), -1/(R1*C1), 0;
              (C2*dR2_dSOC + R2*dC2_dSOC)/((R2*C2)^2), 0, -1/(R2*C2)];
-%         A = exp(A*dT);
+%         A = expm(A*dT);
         % mean: mu_k|k-1
         mu_predict = mu(:,k-1) + dT*[-I(k-1)*(1/3600)/Qn; ...
                                     (-mu(2,k-1)/(R1*C1)) + (I(k-1)/C1); ...

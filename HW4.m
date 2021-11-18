@@ -22,7 +22,7 @@ SOC_Coulomb_Counting = SOC0 - (cumtrapz(t, I)/3600)/Qn;
 
 %Making the Voltage measured input to EKF the simulated voltage (using
 %differential equations)
-% [V,V1,V2,percent_rmse_Vb] = simulate(R0_chg,R0_dischg,R0_dischg_4A,R1_chg,R1_dischg,C1_chg,C1_dischg,R2_chg,R2_dischg,C2_chg,C2_dischg,soc_chg,soc_dischg,I,V,t,Qn,SOC0,OCV_map,SOC_map);
+[V,V1,V2,percent_rmse_Vb] = simulate(R0_chg,R0_dischg,R0_dischg_4A,R1_chg,R1_dischg,C1_chg,C1_dischg,R2_chg,R2_dischg,C2_chg,C2_dischg,soc_chg,soc_dischg,I,V,t,Qn,SOC0,OCV_map,SOC_map);
 
 
 %Initial guess of mu and S
@@ -224,7 +224,7 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
         A = [0, 0, 0;
              (C1*dR1_dSOC + R1*dC1_dSOC)/((R1*C1)^2), -1/(R1*C1), 0;
              (C2*dR2_dSOC + R2*dC2_dSOC)/((R2*C2)^2), 0, -1/(R2*C2)];
-%         A = exp(A*dT);
+%         A = expm(A*dT);
         % mean: mu_k|k-1
         mu_predict = mu(:,k-1) + dT*[-I(k-1)*(1/3600)/Qn; ...
                                     (-mu(2,k-1)/(R1*C1)) + (I(k-1)/C1); ...
