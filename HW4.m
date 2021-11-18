@@ -44,7 +44,6 @@ S0 = diag([0.1,0,0]);
 % Q and R from lecture slides
 R = 8.432e-4;
 Q = diag([1000*R,0.1*R,0.01*R]);
-%               EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg_4A,R1_chg,R1_dischg,C1_chg,C1_dischg,R2_chg,R2_dischg,C2_chg,C2_dischg,soc_chg,soc_dischg,Qn,SOC_map,OCV_map)
 [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg_4A,R1_chg,R1_dischg,C1_chg,C1_dischg,R2_chg,R2_dischg,C2_chg,C2_dischg,soc_chg,soc_dischg,Qn,SOC_map,OCV_map);
 
 %Plotting voltage prediciton based on mu_k|k
@@ -404,20 +403,20 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
         % evaluate jacobian of A and B (evaluate at mu_k-1|k-1 --> A_k-1 and B_k-1)
         dT = t(k) - t(k-1);
         if I(k-1) < 0
-            R1 = interp1(soc_chg,R1_chg,mu(1,k-1));
-            C1 = interp1(soc_chg,C1_chg,mu(1,k-1));
-            R2 = interp1(soc_chg,R2_chg,mu(1,k-1));
-            C2 = interp1(soc_chg,C2_chg,mu(1,k-1));
+            R1 = interp1(soc_chg,R1_chg,mu(1,k-1),'linear','extrap');
+            C1 = interp1(soc_chg,C1_chg,mu(1,k-1),'linear','extrap');
+            R2 = interp1(soc_chg,R2_chg,mu(1,k-1),'linear','extrap');
+            C2 = interp1(soc_chg,C2_chg,mu(1,k-1),'linear','extrap');
 
             dR1_dSOC = find_d_dSOC(soc_chg,R1_chg,mu(1,k-1));
             dC1_dSOC = find_d_dSOC(soc_chg,C1_chg,mu(1,k-1));
             dR2_dSOC = find_d_dSOC(soc_chg,R2_chg,mu(1,k-1));
             dC2_dSOC = find_d_dSOC(soc_chg,C2_chg,mu(1,k-1));
         else
-            R1 = interp1(soc_dischg,R1_dischg,mu(1,k-1));
-            C1 = interp1(soc_dischg,C1_dischg,mu(1,k-1));
-            R2 = interp1(soc_dischg,R2_dischg,mu(1,k-1));
-            C2 = interp1(soc_dischg,C2_dischg,mu(1,k-1));
+            R1 = interp1(soc_dischg,R1_dischg,mu(1,k-1),'linear','extrap');
+            C1 = interp1(soc_dischg,C1_dischg,mu(1,k-1),'linear','extrap');
+            R2 = interp1(soc_dischg,R2_dischg,mu(1,k-1),'linear','extrap');
+            C2 = interp1(soc_dischg,C2_dischg,mu(1,k-1),'linear','extrap');
 
             dR1_dSOC = find_d_dSOC(soc_dischg,R1_dischg,mu(1,k-1));
             dC1_dSOC = find_d_dSOC(soc_dischg,C1_dischg,mu(1,k-1));
@@ -429,9 +428,9 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
              (C1*dR1_dSOC + R1*dC1_dSOC)/((R1*C1)^2), -1/(R1*C1), 0;
              (C2*dR2_dSOC + R2*dC2_dSOC)/((R2*C2)^2), 0, -1/(R2*C2)];
         % mean: mu_k|k-1
-        mu_predict = [-I(k-1)/Qn; ...
-                      (-mu(2,k-1)/(R1*C1)) + (I(k-1)/C1); ...
-                      (-mu(3,k-1)/(R2*C2)) + (I(k-1)/C2)];
+        mu_predict = mu(:,k-1) + dT*[-I(k-1)*(1/3600)/Qn; ...
+                                    (-mu(2,k-1)/(R1*C1)) + (I(k-1)/C1); ...
+                                    (-mu(3,k-1)/(R2*C2)) + (I(k-1)/C2)];
         %constraining SOC
         mu_predict(1) = saturate(mu_predict(1),0,1);
         %covariance: S_k|k-1
@@ -442,14 +441,14 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
         %evaluate jacobian of C (Evaluate Ck at mu_k|k-1)
         dVoc_dSOC = find_d_dSOC(SOC_map,OCV_map,mu_predict(1));
         if I(k) < 0
-            R0 = interp1(soc_chg,R0_chg,mu_predict(1));
+            R0 = interp1(soc_chg,R0_chg,mu_predict(1),'linear','extrap');
             dR0_dSOC = find_d_dSOC(soc_chg,R0_chg,mu_predict(1));
         else
             if I(k) >= 4
-                R0 = interp1(soc_dischg,R0_dischg_4A,mu_predict(1));
+                R0 = interp1(soc_dischg,R0_dischg_4A,mu_predict(1),'linear','extrap');
                 dR0_dSOC = find_d_dSOC(soc_dischg,R0_dischg_4A,mu_predict(1));
             else
-                R0 = interp1(soc_dischg,R0_dischg,mu_predict(1));
+                R0 = interp1(soc_dischg,R0_dischg,mu_predict(1),'linear','extrap');
                 dR0_dSOC = find_d_dSOC(soc_dischg,R0_dischg,mu_predict(1));
             end
         end
@@ -465,65 +464,15 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
         S(:,:,k) = S_predict - K(:,k)*Ck*S_predict; %Evaluate at S_k|k-1,Ck
         Voc = interp1(SOC_map,OCV_map,mu(1,k),'linear','extrap');
         if I(k) < 0
-            R0 = interp1(soc_chg,R0_chg,mu(1,k));
+            R0 = interp1(soc_chg,R0_chg,mu(1,k),'linear','extrap');
         else
             if I(k) >= 4
-                R0 = interp1(soc_dischg,R0_dischg_4A,mu(1,k));
+                R0 = interp1(soc_dischg,R0_dischg_4A,mu(1,k),'linear','extrap');
             else
-                R0 = interp1(soc_dischg,R0_dischg,mu(1,k));
+                R0 = interp1(soc_dischg,R0_dischg,mu(1,k),'linear','extrap');
             end
         end
         Vb(k) = Voc - mu(2,k) - mu(3,k) - I(k)*R0; 
-    end
-end
-
-function [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,SOC_map,OCV_map)
-    tau1 = R1*C1;
-    tau2 = R2*C2;
-    N = length(t);
-    max_growth = 0.05;
-    num_states = 4;
-    %Predicted Measurement
-    Vb = zeros(N,1);
-    %initializing mean and covariance
-    mu = zeros(num_states,N);%[SOC,R0,V1,V2]
-    mu(:,1) = mu0;
-    S = zeros(num_states,num_states,N);
-    S(:,:,1) = S0;
-    for k = 2:1:N  
-        %----predict step----
-        % evaluate jacobian of A and B (evaluate at mu_k-1|k-1 --> A_k-1 and B_k-1)
-        dT = t(k) - t(k-1);
-        Akm1 = [1,0,0,0;
-                0,exp(-dT/tau1),0,0;
-                0,0,exp(-dT/tau2),0;
-                0,0,0,1]; % Notation: km1 = k-1 
-        Bkm1 = [-(dT/3600)/Qn; R1*(1 - exp(-dT/tau1)); R2*(1 - exp(-dT/tau2));0];% Notation: km1 = k-1
-        % mean: mu_k|k-1
-        mu_predict = Akm1*mu(:,k-1) + Bkm1*I(k-1); 
-        %constraining SOC and R0
-        mu_predict(1) = saturate(mu_predict(1),0,1);
-        mu_predict(4) = growth(mu_predict(4),mu(4,k-1),max_growth);
-        %covariance: S_k|k-1
-        S_predict = Akm1*S(:,:,k-1)*Akm1' + Q; 
-    
-    
-        %----update step----
-        %evaluate jacobian of C (Evaluate Ck at mu_k|k-1)
-        dVoc_dSOC = find_dVoc_dSOC(SOC_map,OCV_map,mu_predict(1));
-        Ck = [dVoc_dSOC, -1, -1, -I(k)];
-        %Kalman Gain
-        K = S_predict*Ck'*inv(Ck*S_predict*Ck' + R); 
-        % mean: mu_k|k
-        Voc = interp1(SOC_map,OCV_map,mu_predict(1),'linear','extrap');
-        mu(:,k) = mu_predict + K*(V(k) - (Voc - mu_predict(2) - mu_predict(3) - I(k)*mu_predict(4))); %Evaluate at mu_k|k-1
-        %constraining SOC and R0
-        mu(1,k) = saturate(mu(1,k),0,1);
-        mu(4,k) = growth(mu(4,k),mu(4,k-1),max_growth);
-        %covariance: S_k|k
-        S(:,:,k) = S_predict - K*Ck*S_predict; %Evaluate at S_k|k-1,Ck
-        Voc = interp1(SOC_map,OCV_map,mu(1,k),'linear','extrap');
-        Vb(k) = Voc - mu(2,k) - mu(3,k) - I(k)*mu(4,k); % yk = g(mu_k|k) 
     end
 end
 
