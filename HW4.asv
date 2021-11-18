@@ -35,7 +35,7 @@ S0 = diag([0.1,0,0]);
 % num_params = 4;
 % max_time = 60*10;
 % options = optimoptions('ga','PlotFcn',@gaplotbestf,'MaxTime',max_time);
-% [ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_SOC_V1_V2(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R0,R1,C1,R2,C2,Qn,SOC_map,OCV_map),num_params,[],[],[],[],lb,ub,[],options);
+% [ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_SOC_V1_V2(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R0_chg,R0_dischg,R0_dischg_4A,R1_chg,R1_dischg,C1_chg,C1_dischg,R2_chg,R2_dischg,C2_chg,C2_dischg,soc_chg,soc_dischg,Qn,SOC_map,OCV_map),num_params,[],[],[],[],lb,ub,[],options);
 % Q = diag(exp(ga_params(2:end)))
 % R = exp(ga_params(1))
 
@@ -74,105 +74,6 @@ title('Kalman Gain vs. Time');
 xlabel('Time (sec)'); ylabel('Gain');
 legend('k1','k2','k3');
 
-%% EKF - with R0
-load('HW4_batt_params.mat');
-load('HW4_expt_data.mat');
-t = 0:dt:((length(I_expt) - 1)*dt);
-I = I_expt;
-V = V_expt;
-Qn = capacity;
-SOC_map = Voc_vs_SOC(:,1);
-OCV_map = Voc_vs_SOC(:,2);
-R0 = mean([R0_chg,R0_dischg]);
-R1 = mean([R1_chg,R1_dischg]);
-C1 = mean([C1_chg,C1_dischg]);
-R2 = mean([R2_chg,R2_dischg]);
-C2 = mean([C2_chg,C2_dischg]);
-
-SOC0 = SOC_init;
-SOC_Coulomb_Counting = SOC0 - (cumtrapz(t, I)/3600)/Qn;
-
-
-% ECM_params_ga_ch = [R0_chg;R1_chg;C1_chg;R2_chg;C2_chg]';
-% SOC_ch = soc_chg;
-% ECM_params_ga_disch = [R0_dischg;R1_dischg;C1_dischg;R2_dischg;C2_dischg]';
-% SOC_disch = soc_dischg;
-% [V,V1,V2,percent_rmse_Vb] = simulate(ECM_params_ga_ch,SOC_ch,ECM_params_ga_disch,SOC_disch,I,V,t,Qn,SOC0,OCV_map,SOC_map);
-
-SOC0 = 0 - (trapz(data(1:start_idx,2), -data(1:start_idx,4))/3600)/Qn;
-SOC_Coulomb_Counting = SOC0 - (cumtrapz(t, I)/3600)/Qn;
-
-R0 = mean([ECM_params_ga_disch(:,1); ECM_params_ga_ch(:,1)]);
-R1 = mean([ECM_params_ga_disch(:,2); ECM_params_ga_ch(:,2)]);
-C1 = mean([ECM_params_ga_disch(:,3); ECM_params_ga_ch(:,3)]);
-R2 = mean([ECM_params_ga_disch(:,4); ECM_params_ga_ch(:,4)]);
-C2 = mean([ECM_params_ga_disch(:,5); ECM_params_ga_ch(:,5)]);
-
-%Initial estimates 
-SOC0 = rand();
-mu0 = [SOC0;0;0;R0]; 
-S0 = diag([0.1,0.001,0.001,0.01]);
-% S0 = diag([(SOC0 - SOC_Coulomb_Counting(1))^2,0,0,0]);
-
-% % Finding Q from GA
-% num_params = 5;
-% lb = -7*ones(num_params,1);
-% ub = 0*ones(num_params,1);
-% max_time = 60*10;
-% options = optimoptions('ga','PlotFcn',@gaplotbestf,'MaxTime',max_time);
-% [ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_SOC_V1_V2_R0(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R1,C1,R2,C2,Qn,SOC_map,OCV_map),num_params,[],[],[],[],lb,ub,[],options);
-% Q = diag(exp(ga_params(2:end)))
-% R = exp(ga_params(1))
-
-%%
-% %From lecture slides
-% R = 1e-4;
-% % Q = diag([100*R,0.1*R,0.01*R,0.1*R]);
-
-% %From GA with Q
-% R = 1e-4;
-% Q = [1.9474        0         0         0;
-%          0    0.0733         0         0;
-%          0         0    0.0171         0;
-%          0         0         0    0.0019]; %<--these values found from GA above (see GA_convergence.fig)
-
-% From GA with Q and R as a params
-R = 131.8108;
-Q =  [493.7918         0         0         0;
-             0    0.0031         0         0;
-             0         0    0.0018         0;
-             0         0         0    0.6748];
-
-[mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,SOC_map,OCV_map);
-
-%Plotting voltage prediciton based on mu_k|k
-figure(); hold on;
-plot(t,V,'DisplayName','Measured');
-plot(t,Vb,'DisplayName','EKF Prediciton');
-title('Voltage vs. Time');
-xlabel('Time (sec)');
-ylabel('Voltage (V)');
-legend('Location','best');
-percent_rmse_Vb = calc_percent_rmse(V,Vb);
-disp(['RMS Error in Vb (EKF) = ' num2str(percent_rmse_Vb) '%']);
-
-%Plotting SOC for Coulomb Counting and EKF
-figure(); hold on;
-plot(t,100*SOC_Coulomb_Counting,'DisplayName','Coulomb Counting');
-plot(t,100*mu(1,:),'DisplayName','EKF Prediciton');
-title('SOC vs. Time');
-xlabel('Time (sec)');
-ylabel('SOC (%)');
-legend('Location','best');
-percent_rmse_SOC = calc_percent_rmse(SOC_Coulomb_Counting,mu(1,:));
-disp(['RMS Error in SOC (EKF vs. Coulomb Counting) = ' num2str(percent_rmse_SOC) '%']);
-
-%Plotting R0 vs. time
-figure(); hold on;
-plot(t,mu(4,:));
-title('R0 vs. Time');
-xlabel('Time (sec)');
-ylabel('R0 (Ohms)');
 
 %% Vb Simulated without EKF
 load('workspace.mat');
@@ -427,8 +328,9 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
         A = [0, 0, 0;
              (C1*dR1_dSOC + R1*dC1_dSOC)/((R1*C1)^2), -1/(R1*C1), 0;
              (C2*dR2_dSOC + R2*dC2_dSOC)/((R2*C2)^2), 0, -1/(R2*C2)];
+%         A = exp(A*dT);
         % mean: mu_k|k-1
-        mu_predict = mu(:,k-1) + dT*[-I(k-1)/Qn; ...
+        mu_predict = mu(:,k-1) + dT*[-I(k-1)*(1/3600)/Qn; ...
                                     (-mu(2,k-1)/(R1*C1)) + (I(k-1)/C1); ...
                                     (-mu(3,k-1)/(R2*C2)) + (I(k-1)/C2)];
         %constraining SOC
@@ -452,16 +354,17 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
                 dR0_dSOC = find_d_dSOC(soc_dischg,R0_dischg,mu_predict(1));
             end
         end
-        Ck = [(dVoc_dSOC - dR0_dSOC*I(k)), -1, -1];
+        C = [(dVoc_dSOC - dR0_dSOC*I(k)), -1, -1];
         %Kalman Gain
-        K(:,k) = S_predict*Ck'*inv(Ck*S_predict*Ck' + R); 
+        K(:,k) = S_predict*C'*inv(C*S_predict*C' + R); 
         % mean: mu_k|k
         Voc = interp1(SOC_map,OCV_map,mu_predict(1),'linear','extrap');
         mu(:,k) = mu_predict + K(:,k)*(V(k) - (Voc - mu_predict(2) - mu_predict(3) - I(k)*R0)); %Evaluate at mu_k|k-1
         %constraining SOC
         mu(1,k) = saturate(mu(1,k),0,1);
         %covariance: S_k|k
-        S(:,:,k) = S_predict - K(:,k)*Ck*S_predict; %Evaluate at S_k|k-1,Ck
+        S(:,:,k) = S_predict - K(:,k)*C*S_predict; %Evaluate at S_k|k-1,Ck
+        %Finding 
         Voc = interp1(SOC_map,OCV_map,mu(1,k),'linear','extrap');
         if I(k) < 0
             R0 = interp1(soc_chg,R0_chg,mu(1,k),'linear','extrap');
@@ -476,18 +379,10 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
     end
 end
 
-function loss = objective_function_EKF_SOC_V1_V2_R0(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R1,C1,R2,C2,Qn,SOC_map,OCV_map)
+function loss = objective_function_EKF_SOC_V1_V2(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R0_chg,R0_dischg,R0_dischg_4A,R1_chg,R1_dischg,C1_chg,C1_dischg,R2_chg,R2_dischg,C2_chg,C2_dischg,soc_chg,soc_dischg,Qn,SOC_map,OCV_map)
     Q = diag(exp(ga_params(2:end)));
     R = exp(ga_params(1));
-    [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,SOC_map,OCV_map);
-    loss = calc_percent_rmse(SOC_Coulomb_Counting,mu(1,:));
-    disp(loss);
-end
-
-function loss = objective_function_EKF_SOC_V1_V2(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R0,R1,C1,R2,C2,Qn,SOC_map,OCV_map)
-    Q = diag(exp(ga_params(2:end)));
-    R = exp(ga_params(1));
-    [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0,R1,C1,R2,C2,Qn,SOC_map,OCV_map);
+    [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg_4A,R1_chg,R1_dischg,C1_chg,C1_dischg,R2_chg,R2_dischg,C2_chg,C2_dischg,soc_chg,soc_dischg,Qn,SOC_map,OCV_map);
     loss = calc_percent_rmse(SOC_Coulomb_Counting,mu(1,:));
     disp(loss);
 end
