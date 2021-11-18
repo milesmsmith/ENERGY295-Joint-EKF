@@ -1,4 +1,4 @@
-%% Joint EKF for SOC and SOH
+%% Homework 4
 
 % Authors: Miles, Jessica, Tom
 % ENERGY 295
@@ -8,173 +8,31 @@ close all;
 clear;
 clc;
 
-%% Finding Qn and SOC-OCV Map
-data = xlsread('INR21700_M50T_T23_OCV_W8.xlsx');
-t = data(:,2);
-V = data(:,3);
-I = -data(:,4); %sign convention such that I being positive denotes current comming out of battery
-
-Q = cumtrapz(t, I)/3600; %Ah
-Qn = Q(end);
-disp(['Qn = ' num2str(Qn)]);
-SOC = 1 - Q/Qn;
-OCV = V;
-
-SOC_map = 0:0.0001:1;
-OCV_map = interp1(SOC,OCV,SOC_map);
-
-figure();hold on;
-plot(100*SOC,OCV,'DisplayName','All Points');
-plot(100*SOC_map,OCV_map,'DisplayName','Reduced Points');
-title('OCV vs. SOC');
-xlabel('SOC (%)');
-ylabel('OCV (Voltage)');
-legend('Location','Best');
-
-%% Fitting SOC-OCV Map
-%Check out this paper for discussion of polynomial fitting: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8439349/
-
-figure();hold on;
-for n = [9,11,13,101]
-    p = polyfit(SOC_map,OCV_map,n);
-    ocv = polyval(p,SOC_map);
-    plot(100*SOC_map,ocv,'DisplayName',['Polynomial Fit, n = ' num2str(n)]);
-    disp(['RMS Error (n = ' num2str(n) ') = ' num2str(rms(ocv - OCV_map)*(100*length(OCV_map)/sum(OCV_map))) '%']);
-end
-plot(100*SOC_map,OCV_map,'DisplayName','Experimental');
-title('OCV vs. SOC');
-xlabel('SOC (%)');
-ylabel('OCV (Voltage)');
-legend('Location','Best');
-
-final_polynomial_degree = 101;
-p_SOC_OCV_map = polyfit(SOC_map,OCV_map,final_polynomial_degree); %<-- high degree yeild better percent_rms_error
-p_dOCVdSOC_map = p_SOC_OCV_map(1:(end-1)).*fliplr(1:1:(length(p_SOC_OCV_map) - 1));
-
-figure();
-plot(100*SOC_map,polyval(p_dOCVdSOC_map,SOC_map)/100);
-title('Verifying Slope of derivative SOC-OCV fit');
-xlabel('SOC (%)'); ylabel('dOCV/dSOC (V/%)');
-%% Finding Initial Guess of R0,R1,C1,R2,C2
-data = xlsread('INR21700_M50T_T23_HPPC_N0_W8.xlsx');
-t = data(:,2);
-V = data(:,3);
-I = -data(:,4);
-
-SOC0 = 0;
-Q = cumtrapz(t, I)/3600; %Ah
-SOC = SOC0 - Q/Qn;
-
-% ---- Charging ----
-data_padding = 20;
-%parsing data
-[start_ch_idxs, end_ch_idxs] = find_charge_idxs(I,data_padding);
-%graphically estimating parameters
-[SOC_ch,R0_ch,R1_ch,C1_ch,R2_ch,C2_ch] = estimate_parameters_graphically(start_ch_idxs, end_ch_idxs,t,V,I,SOC,data_padding);
-%forming upper and lower bounds on parameter values
-ECM_params_graphical_ch = [R0_ch,R1_ch,C1_ch,R2_ch,C2_ch];
-ub_ch = 1.2*ECM_params_graphical_ch;
-lb_ch = 0.8*ECM_params_graphical_ch;
-%running genertic algorithm with bounds
-[R0_ch,R1_ch,C1_ch,R2_ch,C2_ch,percent_rms_error_ch] = estimate_parameters_ga(start_ch_idxs, end_ch_idxs,t,V,I,SOC,SOC_map,OCV_map,ub_ch,lb_ch);
-ECM_params_ga_ch = [R0_ch,R1_ch,C1_ch,R2_ch,C2_ch];
-
-% ---- Discharging ----
-%parsing data
-[start_disch_idxs, end_disch_idxs] = find_discharge_idxs(I,data_padding);
-%graphically estimating parameters
-[SOC_disch,R0_disch,R1_disch,C1_disch,R2_disch,C2_disch] = estimate_parameters_graphically(start_disch_idxs, end_disch_idxs,t,V,I,SOC,data_padding);
-%forming upper and lower bounds on parameter values
-ECM_params_graphical_disch = [R0_disch,R1_disch,C1_disch,R2_disch,C2_disch];
-ub_disch = 1.2*ECM_params_graphical_disch;
-lb_disch = 0.8*ECM_params_graphical_disch;
-%running genertic algorithm with bounds
-[R0_disch,R1_disch,C1_disch,R2_disch,C2_disch,percent_rms_error_disch] = estimate_parameters_ga(start_disch_idxs, end_disch_idxs,t,V,I,SOC,SOC_map,OCV_map,ub_disch,lb_disch);
-ECM_params_ga_disch = [R0_disch,R1_disch,C1_disch,R2_disch,C2_disch];
-
-%plotting results
-disp_name = ["R0","R1","C1","R2","C2"];
-units = ["Ohms","Ohms","Farads","Ohms","Farads"];
-for i = 1:1:length(disp_name)
-    figure(); hold on;
-    plot(100*SOC_disch,ECM_params_ga_disch(:,i),'*','DisplayName','Discharging');
-    plot(100*SOC_ch,ECM_params_ga_ch(:,i),'*','DisplayName','Charging');
-    title(disp_name(i) + ' vs. SOC');
-    xlabel('SOC (%)');
-    ylabel(disp_name(i) + ' (' + units(i) + ')');
-    legend('Location','Best');
-end
-disp('RMS Error (Discharging)...');
-discharge_table = table(100*SOC_disch,percent_rms_error_disch);
-disp(discharge_table);
-disp('RMS Error (Charging)...');
-charge_table = table(100*SOC_ch,percent_rms_error_ch);
-disp(charge_table);
-
-%% Estimating Noise 
-% Gain a better estimate of Q and R here...
-
-%Estimate variance of Vb
-data = xlsread('INR21700_M50T_T23_HPPC_N0_W8.xlsx');
-t = data(:,2);
-V = data(:,3);
-
-%FFT analysis
-y = fft(V);
-N = length(V);
-fs = 1/(t(2) - t(1));
-fshift = (-N/2:N/2-1)*(fs/N);
-yshift = fftshift(y);
-figure(); stem(fshift,abs(yshift));
-title('Magnitude of DFT'); xlabel('Frequency (Hz)');ylabel('Magnitude of DFT');
-%--> var_Vb = ? --> R
-
-
-%Estimate variance of SOC
-data = xlsread('INR21700_M50T_T23_OCV_W8.xlsx');
-t = data(:,2);
-I = -data(:,4); %sign convention such that I being positive denotes current comming out of battery
-var_I = var(I);
-var_SOC = var_I/Qn;
-
-%Estimate of variance of R0
-var_R0 = var([R0_disch;R0_ch]);
-
-%Estimate of variance of V1 and V2
-C1 = mean([C1_disch;C1_ch]);
-C2 = mean([C2_disch;C2_ch]);
-var_V1 = (var_I/C1);
-var_V2 = (var_I/C2);
-
-Q = [var_SOC,0,0,0;
-     0,var_V1,0,0;
-     0,0,var_V2,0;
-     0,0,0,var_R0];
-R = var_Vb;
-save('workspace.mat');
-
 %% EKF - without R0
-load('workspace.mat');
-data = xlsread('INR21700_M50T_T23_HPPC_N0_W8.xlsx');
-start_idx = 14476; %skips charging part of curve
-t = data(start_idx:end,2);
-V = data(start_idx:end,3);
-I = -data(start_idx:end,4);
+load('HW4_batt_params.mat');
+load('HW4_expt_data.mat');
+t = 0:dt:((length(I_expt) - 1)*dt);
+I = I_expt;
+V = V_expt;
+Qn = capacity;
+SOC_map = Voc_vs_SOC(:,1);
+OCV_map = Voc_vs_SOC(:,2);
+R0 = mean([R0_chg,R0_dischg]);
+R1 = mean([R1_chg,R1_dischg]);
+C1 = mean([C1_chg,C1_dischg]);
+R2 = mean([R2_chg,R2_dischg]);
+C2 = mean([C2_chg,C2_dischg]);
 
-SOC0 = 0 - (trapz(data(1:start_idx,2), -data(1:start_idx,4))/3600)/Qn;
+SOC0 = SOC_init;
 SOC_Coulomb_Counting = SOC0 - (cumtrapz(t, I)/3600)/Qn;
 
-[V,V1,V2,percent_rmse_Vb] = simulate(ECM_params_ga_ch,SOC_ch,ECM_params_ga_disch,SOC_disch,I,V,t,Qn,SOC0,OCV_map,SOC_map);
 
+% ECM_params_ga_ch = [R0_chg;R1_chg;C1_chg;R2_chg;C2_chg]';
+% SOC_ch = soc_chg;
+% ECM_params_ga_disch = [R0_dischg;R1_dischg;C1_dischg;R2_dischg;C2_dischg]';
+% SOC_disch = soc_dischg;
+% [V,V1,V2,percent_rmse_Vb] = simulate(ECM_params_ga_ch,SOC_ch,ECM_params_ga_disch,SOC_disch,I,V,t,Qn,SOC0,OCV_map,SOC_map);
 
-SOC0 = 0 - (trapz(data(1:start_idx,2), -data(1:start_idx,4))/3600)/Qn;
-SOC_Coulomb_Counting = SOC0 - (cumtrapz(t, I)/3600)/Qn;
-
-R0 = mean([ECM_params_ga_disch(:,1); ECM_params_ga_ch(:,1)]);
-R1 = mean([ECM_params_ga_disch(:,2); ECM_params_ga_ch(:,2)]);
-C1 = mean([ECM_params_ga_disch(:,3); ECM_params_ga_ch(:,3)]);
-R2 = mean([ECM_params_ga_disch(:,4); ECM_params_ga_ch(:,4)]);
-C2 = mean([ECM_params_ga_disch(:,5); ECM_params_ga_ch(:,5)]);
 
 %Initial guess of mu and S
 SOC0 = rand();
@@ -184,14 +42,12 @@ S0 = diag([0.1,0.001,0.001]);
 % % Finding Q from GA
 % R = 8.432e-4;
 % Q_diag = [1000*R,0.1*R,0.01*R];
-% lb = log(0.01*[R Q_diag]);
-% ub = log(100*[R Q_diag]);
+% lb = log(0.5*[R Q_diag]);
+% ub = log(1.5*[R Q_diag]);
 % num_params = 4;
-% % lb = -7*ones(num_params,1);
-% % ub = 0*ones(num_params,1);
 % max_time = 60*10;
 % options = optimoptions('ga','PlotFcn',@gaplotbestf,'MaxTime',max_time);
-% [ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_SOC_V1_V2(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map),num_params,[],[],[],[],lb,ub,[],options);
+% [ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_SOC_V1_V2(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R0,R1,C1,R2,C2,Qn,SOC_map,OCV_map),num_params,[],[],[],[],lb,ub,[],options);
 % Q = diag(exp(ga_params(2:end)))
 % R = exp(ga_params(1))
 
@@ -202,7 +58,7 @@ R = 8.432e-4;
 Q = diag([1000*R,0.1*R,0.01*R]);
 % Q = zeros(3,3);
 
-[mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map);
+[mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0,R1,C1,R2,C2,Qn,SOC_map,OCV_map);
 
 %Plotting voltage prediciton based on mu_k|k
 figure(); hold on;
@@ -230,20 +86,32 @@ figure();
 plot(t,K(1,:),t,K(2,:),t,K(3,:));
 title('Kalman Gain vs. Time');
 xlabel('Time (sec)'); ylabel('Gain');
+legend('k1','k2','k3');
 
 %% EKF - with R0
-load('workspace.mat');
-data = xlsread('INR21700_M50T_T23_HPPC_N0_W8.xlsx');
-start_idx = 14476;
-t = data(start_idx:end,2);
-V = data(start_idx:end,3);
-I = -data(start_idx:end,4);
+load('HW4_batt_params.mat');
+load('HW4_expt_data.mat');
+t = 0:dt:((length(I_expt) - 1)*dt);
+I = I_expt;
+V = V_expt;
+Qn = capacity;
+SOC_map = Voc_vs_SOC(:,1);
+OCV_map = Voc_vs_SOC(:,2);
+R0 = mean([R0_chg,R0_dischg]);
+R1 = mean([R1_chg,R1_dischg]);
+C1 = mean([C1_chg,C1_dischg]);
+R2 = mean([R2_chg,R2_dischg]);
+C2 = mean([C2_chg,C2_dischg]);
 
-SOC0 = 0 - (trapz(data(1:start_idx,2), -data(1:start_idx,4))/3600)/Qn;
+SOC0 = SOC_init;
 SOC_Coulomb_Counting = SOC0 - (cumtrapz(t, I)/3600)/Qn;
 
-[V,V1,V2,percent_rmse_Vb] = simulate(ECM_params_ga_ch,SOC_ch,ECM_params_ga_disch,SOC_disch,I,V,t,Qn,SOC0,OCV_map,SOC_map);
 
+% ECM_params_ga_ch = [R0_chg;R1_chg;C1_chg;R2_chg;C2_chg]';
+% SOC_ch = soc_chg;
+% ECM_params_ga_disch = [R0_dischg;R1_dischg;C1_dischg;R2_dischg;C2_dischg]';
+% SOC_disch = soc_dischg;
+% [V,V1,V2,percent_rmse_Vb] = simulate(ECM_params_ga_ch,SOC_ch,ECM_params_ga_disch,SOC_disch,I,V,t,Qn,SOC0,OCV_map,SOC_map);
 
 SOC0 = 0 - (trapz(data(1:start_idx,2), -data(1:start_idx,4))/3600)/Qn;
 SOC_Coulomb_Counting = SOC0 - (cumtrapz(t, I)/3600)/Qn;
@@ -260,15 +128,15 @@ mu0 = [SOC0;0;0;R0];
 S0 = diag([0.1,0.001,0.001,0.01]);
 % S0 = diag([(SOC0 - SOC_Coulomb_Counting(1))^2,0,0,0]);
 
-% Finding Q from GA
-num_params = 5;
-lb = -7*ones(num_params,1);
-ub = 0*ones(num_params,1);
-max_time = 60*10;
-options = optimoptions('ga','PlotFcn',@gaplotbestf,'MaxTime',max_time);
-[ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_SOC_V1_V2_R0(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map),num_params,[],[],[],[],lb,ub,[],options);
-Q = diag(exp(ga_params(2:end)))
-R = exp(ga_params(1))
+% % Finding Q from GA
+% num_params = 5;
+% lb = -7*ones(num_params,1);
+% ub = 0*ones(num_params,1);
+% max_time = 60*10;
+% options = optimoptions('ga','PlotFcn',@gaplotbestf,'MaxTime',max_time);
+% [ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_SOC_V1_V2_R0(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R1,C1,R2,C2,Qn,SOC_map,OCV_map),num_params,[],[],[],[],lb,ub,[],options);
+% Q = diag(exp(ga_params(2:end)))
+% R = exp(ga_params(1))
 
 %%
 % %From lecture slides
@@ -289,7 +157,7 @@ Q =  [493.7918         0         0         0;
              0         0    0.0018         0;
              0         0         0    0.6748];
 
-[mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map);
+[mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,SOC_map,OCV_map);
 
 %Plotting voltage prediciton based on mu_k|k
 figure(); hold on;
@@ -534,7 +402,7 @@ function y = growth(x_current,x_prev,max_growth)
     end
 end
 
-function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map)
+function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0,R1,C1,R2,C2,Qn,SOC_map,OCV_map)
     tau1 = R1*C1;
     tau2 = R2*C2;
     N = length(t);
@@ -564,7 +432,6 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0,R1,C1,R2,C2,Qn,p_dOCVdS
     
         %----update step----
         %evaluate jacobian of C (Evaluate Ck at mu_k|k-1)
-%         dVoc_dSOC =  polyval(p_dOCVdSOC_map,mu_predict(1));
         dVoc_dSOC = find_dVoc_dSOC(SOC_map,OCV_map,mu_predict(1));
         Ck = [dVoc_dSOC, -1, -1];
         %Kalman Gain
@@ -572,18 +439,16 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0,R1,C1,R2,C2,Qn,p_dOCVdS
         % mean: mu_k|k
         Voc = interp1(SOC_map,OCV_map,mu_predict(1),'linear','extrap');
         mu(:,k) = mu_predict + K(:,k)*(V(k) - (Voc - mu_predict(2) - mu_predict(3) - I(k)*R0)); %Evaluate at mu_k|k-1
-%         mu(:,k) = mu_predict + K(:,k)*(V(k) - (polyval(p_SOC_OCV_map,mu_predict(1)) - mu_predict(2) - mu_predict(3) - I(k)*R0)); %Evaluate at mu_k|k-1
         %constraining SOC
         mu(1,k) = saturate(mu(1,k),0,1);
         %covariance: S_k|k
         S(:,:,k) = S_predict - K(:,k)*Ck*S_predict; %Evaluate at S_k|k-1,Ck
         Voc = interp1(SOC_map,OCV_map,mu(1,k),'linear','extrap');
         Vb(k) = Voc - mu(2,k) - mu(3,k) - I(k)*R0; %polyval(p_SOC_OCV_map,mu(1,k)) % yk = g(mu_k|k)
-%         Vb(k) = polyval(p_SOC_OCV_map,mu(1,k)) - mu(2,k) - mu(3,k) - I(k)*R0; % yk = g(mu_k|k)
     end
 end
 
-function [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map)
+function [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,SOC_map,OCV_map)
     tau1 = R1*C1;
     tau2 = R2*C2;
     N = length(t);
@@ -616,7 +481,6 @@ function [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,p_dOCVdSOC
     
         %----update step----
         %evaluate jacobian of C (Evaluate Ck at mu_k|k-1)
-%         dVoc_dSOC = polyval(p_dOCVdSOC_map,mu_predict(1));
         dVoc_dSOC = find_dVoc_dSOC(SOC_map,OCV_map,mu_predict(1));
         Ck = [dVoc_dSOC, -1, -1, -I(k)];
         %Kalman Gain
@@ -624,7 +488,6 @@ function [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,p_dOCVdSOC
         % mean: mu_k|k
         Voc = interp1(SOC_map,OCV_map,mu_predict(1),'linear','extrap');
         mu(:,k) = mu_predict + K*(V(k) - (Voc - mu_predict(2) - mu_predict(3) - I(k)*mu_predict(4))); %Evaluate at mu_k|k-1
-%         mu(:,k) = mu_predict + K*(V(k) - (polyval(p_SOC_OCV_map,mu_predict(1)) - mu_predict(2) - mu_predict(3) - I(k)*mu_predict(4))); %Evaluate at mu_k|k-1
         %constraining SOC and R0
         mu(1,k) = saturate(mu(1,k),0,1);
         mu(4,k) = growth(mu(4,k),mu(4,k-1),max_growth);
@@ -632,22 +495,21 @@ function [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,p_dOCVdSOC
         S(:,:,k) = S_predict - K*Ck*S_predict; %Evaluate at S_k|k-1,Ck
         Voc = interp1(SOC_map,OCV_map,mu(1,k),'linear','extrap');
         Vb(k) = Voc - mu(2,k) - mu(3,k) - I(k)*mu(4,k); % yk = g(mu_k|k) 
-%         Vb(k) = polyval(p_SOC_OCV_map,mu(1,k)) - mu(2,k) - mu(3,k) - I(k)*mu(4,k); % yk = g(mu_k|k) 
     end
 end
 
-function loss = objective_function_EKF_SOC_V1_V2_R0(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map)
+function loss = objective_function_EKF_SOC_V1_V2_R0(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R1,C1,R2,C2,Qn,SOC_map,OCV_map)
     Q = diag(exp(ga_params(2:end)));
     R = exp(ga_params(1));
-    [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map);
+    [mu,S,Vb] = EKF_SOC_V1_V2_R0(t,V,I,mu0,S0,Q,R,R1,C1,R2,C2,Qn,SOC_map,OCV_map);
     loss = calc_percent_rmse(SOC_Coulomb_Counting,mu(1,:));
     disp(loss);
 end
 
-function loss = objective_function_EKF_SOC_V1_V2(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map)
+function loss = objective_function_EKF_SOC_V1_V2(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R0,R1,C1,R2,C2,Qn,SOC_map,OCV_map)
     Q = diag(exp(ga_params(2:end)));
     R = exp(ga_params(1));
-    [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map);
+    [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0,R1,C1,R2,C2,Qn,SOC_map,OCV_map);
     loss = calc_percent_rmse(SOC_Coulomb_Counting,mu(1,:));
     disp(loss);
 end

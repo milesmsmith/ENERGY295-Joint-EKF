@@ -181,21 +181,21 @@ SOC0 = rand();
 mu0 = [SOC0;0;0]; %Assume starting at rest --> V1_0 = 0, V2_0 = 0
 S0 = diag([0.1,0.001,0.001]);
 
-% % Finding Q from GA
-% R = 8.432e-4;
-% Q_diag = [1000*R,0.1*R,0.01*R];
-% lb = log(0.01*[R Q_diag]);
-% ub = log(100*[R Q_diag]);
-% num_params = 4;
-% % lb = -7*ones(num_params,1);
-% % ub = 0*ones(num_params,1);
-% max_time = 60*10;
-% options = optimoptions('ga','PlotFcn',@gaplotbestf,'MaxTime',max_time);
-% [ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_SOC_V1_V2(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map),num_params,[],[],[],[],lb,ub,[],options);
-% Q = diag(exp(ga_params(2:end)))
-% R = exp(ga_params(1))
+% Finding Q from GA
+R = 8.432e-4;
+Q_diag = [1000*R,0.1*R,0.01*R];
+lb = log(0.01*[R Q_diag]);
+ub = log(100*[R Q_diag]);
+num_params = 4;
+% lb = -7*ones(num_params,1);
+% ub = 0*ones(num_params,1);
+max_time = 60*10;
+options = optimoptions('ga','PlotFcn',@gaplotbestf,'MaxTime',max_time);
+[ga_params, ga_loss] = ga(@(ga_params)objective_function_EKF_SOC_V1_V2(ga_params,t,V,I,SOC_Coulomb_Counting,mu0,S0,R0,R1,C1,R2,C2,Qn,p_dOCVdSOC_map,p_SOC_OCV_map,SOC_map,OCV_map),num_params,[],[],[],[],lb,ub,[],options);
+Q = diag(exp(ga_params(2:end)))
+R = exp(ga_params(1))
 
-
+%%
 %Estimating Noise Matrices
 % Q and R from lecture slides
 R = 8.432e-4;
@@ -229,7 +229,7 @@ disp(['RMS Error in SOC (EKF vs. Coulomb Counting) = ' num2str(percent_rmse_SOC)
 figure();
 plot(t,K(1,:),t,K(2,:),t,K(3,:));
 title('Kalman Gain vs. Time');
-xlabel('Time (sec)'); ylabel('Gain');
+xlabe('Time (sec)'); ylabel('Gain');
 
 %% EKF - with R0
 load('workspace.mat');
