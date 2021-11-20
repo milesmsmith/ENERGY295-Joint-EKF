@@ -27,11 +27,11 @@ SOC0 = SOC_init;
 SOC_Coulomb_Counting = SOC0 - (cumtrapz(t, I)/3600)/Qn;
 
 
-% ECM_params_ga_ch = [R0_chg;R1_chg;C1_chg;R2_chg;C2_chg]';
-% SOC_ch = soc_chg;
-% ECM_params_ga_disch = [R0_dischg;R1_dischg;C1_dischg;R2_dischg;C2_dischg]';
-% SOC_disch = soc_dischg;
-% [V,V1,V2,percent_rmse_Vb] = simulate(ECM_params_ga_ch,SOC_ch,ECM_params_ga_disch,SOC_disch,I,V,t,Qn,SOC0,OCV_map,SOC_map);
+ECM_params_ga_ch = [R0_chg;R1_chg;C1_chg;R2_chg;C2_chg]';
+SOC_ch = soc_chg;
+ECM_params_ga_disch = [R0_dischg;R1_dischg;C1_dischg;R2_dischg;C2_dischg]';
+SOC_disch = soc_dischg;
+[V,V1,V2,percent_rmse_Vb] = simulate(ECM_params_ga_ch,SOC_ch,ECM_params_ga_disch,SOC_disch,I,V,t,Qn,SOC0,OCV_map,SOC_map);
 
 
 %Initial guess of mu and S
