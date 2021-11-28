@@ -122,6 +122,7 @@ function [x_t,Vb,L] = EKF(dt,V_expt,I_expt,x_t,P_t,Q,R,R0_chg,R0_dischg,R0_disch
         soc_chg,soc_dischg,capacity,Voc_vs_SOC,deltaSOC,adaptive,W)
     N = length(V_expt);
     for i = 2:N
+         % Predict
         if I_expt(i-1) < 0
             R0 = interp1(soc_chg, R0_chg, x_t(1,i-1), 'linear','extrap');
             R1 = interp1(soc_chg, R1_chg, x_t(1,i-1), 'linear','extrap');
@@ -151,15 +152,12 @@ function [x_t,Vb,L] = EKF(dt,V_expt,I_expt,x_t,P_t,Q,R,R0_chg,R0_dischg,R0_disch
             dC2 = derivative(soc_dischg, C2_dischg, x_t(1,i-1),deltaSOC);
         end
         
-        dV_dSOCV = derivative(Voc_vs_SOC(:,1), Voc_vs_SOC(:,2), ...
-                                    x_t(1,i-1),deltaSOC);
+        
         A = [0, 0, 0; ...
              ( x_t(2,i-1)*(R1*dC1 + C1*dR1)/(R1*C1)^2 - I_expt(i-1)*dC1/C1^2 ), ( -1/(R1*C1) ), 0;
              ( x_t(3,i-1)*(R2*dC2 + C2*dR2)/(R2*C2)^2 - I_expt(i-1)*dC2/C2^2 ), 0,              ( -1/(R2*C2) )];
         B = [-1/(3600*capacity); 1/C1; 1/C2];
-        C = [(dV_dSOCV - I_expt(i-1)*dR0), -1, -1];
     
-        % Predict
         x_tp(:,i) = x_t(:,i-1) + dt*[-I_expt(i-1)/(3600*capacity);...
                                     -x_t(2,i-1)/(R1*C1) + I_expt(i-1)/C1;...
                                     -x_t(3,i-1)/(R2*C2) + I_expt(i-1)/C2];
@@ -167,6 +165,19 @@ function [x_t,Vb,L] = EKF(dt,V_expt,I_expt,x_t,P_t,Q,R,R0_chg,R0_dischg,R0_disch
         P_tp = A*P_t*A' + Q;
         
         % Correct
+        if I_expt(i-1) < 0
+            dR0 = derivative(soc_chg, R0_chg, x_t(1,i-1),deltaSOC);
+        else
+            if I_expt(i-1)>=4
+                dR0 = derivative(soc_dischg, R0_dischg_4A, x_t(1,i-1),deltaSOC);
+            else
+                dR0 = derivative(soc_dischg, R0_dischg, x_t(1,i-1),deltaSOC);
+            end
+        end
+        dV_dSOC = derivative(Voc_vs_SOC(:,1), Voc_vs_SOC(:,2), ...
+                                    x_tp(1,i),deltaSOC);
+        C = [(dV_dSOC - I_expt(i)*dR0), -1, -1];
+
         L(:,i) = P_tp * C' * inv(C*P_tp*C' + R);
         Voc = interp1(Voc_vs_SOC(:,1), Voc_vs_SOC(:,2), x_tp(1,i),'linear','extrap');
         V = Voc - x_tp(2,i) - x_tp(3,i) - I_expt(i)*R0;
