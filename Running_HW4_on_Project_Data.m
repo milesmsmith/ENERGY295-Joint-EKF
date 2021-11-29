@@ -1,10 +1,4 @@
-%% HW 4
 
-% Authors: Jessica, Tom, Miles
-% ENERGY295
-% 11/23/2021
-
-%% Problem 1 and 2
 clear all; close all; format compact; clc
 rootFolder = cd;
 
@@ -140,10 +134,10 @@ N = length(V_expt);
 W = 10;
 
 R0_init = mean([ECM_params_ga_dischg(:,1); ECM_params_ga_chg(:,1)]);
-P_t = [0.1 0 0 0; 0 0.001 0 0; 0 0 0.001 0; 0 0 0 0.001];
-x_t(:,1) = [SOC_CC(1); 0; 0; R0_init];
+P_t = [0.1 0 0 ; 0 0.001 0 ; 0 0 0.001];
+x_t(:,1) = [SOC_CC(1); 0; 0];
 R = 8.432e-4;
-Q =  diag([1000*R,0.1*R,0.01*R,4.7796]);
+Q =  diag([1000*R,0.1*R,0.01*R]);
 % R = 131.8108;
 % Q = [493.7918         0         0         0;
 %              0    0.0031         0         0;
@@ -155,24 +149,21 @@ max_growth = 0.05;
 
 for i = 2:N
     % Predict
+    dt = t(i)-t(i-1);
     if I_expt(i-1) < 0
-        R0 = interp1(soc_chg, R0_chg, x_t(1,i-1), 'linear','extrap');
         R1 = interp1(soc_chg, R1_chg, x_t(1,i-1), 'linear','extrap');
         R2 = interp1(soc_chg, R2_chg, x_t(1,i-1), 'linear','extrap');
         C1 = interp1(soc_chg, C1_chg, x_t(1,i-1), 'linear','extrap');
         C2 = interp1(soc_chg, C2_chg, x_t(1,i-1), 'linear','extrap');
-        dR0 = derivative(soc_chg, R0_chg, x_t(1,i-1),deltaSOC);
         dR1 = derivative(soc_chg, R1_chg, x_t(1,i-1),deltaSOC);
         dR2 = derivative(soc_chg, R2_chg, x_t(1,i-1),deltaSOC);
         dC1 = derivative(soc_chg, C1_chg, x_t(1,i-1),deltaSOC);
         dC2 = derivative(soc_chg, C2_chg, x_t(1,i-1),deltaSOC);
     else
-        R0 = interp1(soc_chg, R0_dischg, x_t(1,i-1), 'linear','extrap');
-        dR0 = derivative(soc_dischg, R0_dischg, x_t(1,i-1),deltaSOC);
-        R1 = interp1(soc_chg, R1_dischg, x_t(1,i-1), 'linear','extrap');
-        R2 = interp1(soc_chg, R2_dischg, x_t(1,i-1), 'linear','extrap');
-        C1 = interp1(soc_chg, C1_dischg, x_t(1,i-1), 'linear','extrap');
-        C2 = interp1(soc_chg, C2_dischg, x_t(1,i-1), 'linear','extrap');
+        R1 = interp1(soc_dischg, R1_dischg, x_t(1,i-1), 'linear','extrap');
+        R2 = interp1(soc_dischg, R2_dischg, x_t(1,i-1), 'linear','extrap');
+        C1 = interp1(soc_dischg, C1_dischg, x_t(1,i-1), 'linear','extrap');
+        C2 = interp1(soc_dischg, C2_dischg, x_t(1,i-1), 'linear','extrap');
         dR1 = derivative(soc_dischg, R1_dischg, x_t(1,i-1),deltaSOC);
         dR2 = derivative(soc_dischg, R2_dischg, x_t(1,i-1),deltaSOC);
         dC1 = derivative(soc_dischg, C1_dischg, x_t(1,i-1),deltaSOC);
@@ -183,19 +174,21 @@ for i = 2:N
     A = [0, 0, 0; ...
          ( x_t(2,i-1)*(R1*dC1 + C1*dR1)/(R1*C1)^2 - I_expt(i-1)*dC1/C1^2 ), ( -1/(R1*C1) ), 0;
          ( x_t(3,i-1)*(R2*dC2 + C2*dR2)/(R2*C2)^2 - I_expt(i-1)*dC2/C2^2 ), 0,              ( -1/(R2*C2) )];
-    B = [-1/(3600*capacity); 1/C1; 1/C2];
+    B = [-1/(3600*Qn); 1/C1; 1/C2];
 
-    x_tp(:,i) = x_t(:,i-1) + dt*[-I_expt(i-1)/(3600*capacity);...
+    x_tp(:,i) = x_t(:,i-1) + dt*[-I_expt(i-1)/(3600*Qn);...
                                 -x_t(2,i-1)/(R1*C1) + I_expt(i-1)/C1;...
                                 -x_t(3,i-1)/(R2*C2) + I_expt(i-1)/C2];
     x_tp(1,i) = saturate(x_tp(1,i),0,1);
     P_tp = A*P_t*A' + Q;
     
     % Correct
-    if I_expt(i-1) < 0
-        dR0 = derivative(soc_chg, R0_chg, x_t(1,i-1),deltaSOC);
+    if I_expt(i) < 0
+        R0 = interp1(soc_chg, R0_chg, x_tp(1,i), 'linear','extrap');
+        dR0 = derivative(soc_chg, R0_chg, x_tp(1,i),deltaSOC);
     else
-        dR0 = derivative(soc_dischg, R0_dischg, x_t(1,i-1),deltaSOC);
+        R0 = interp1(soc_dischg, R0_dischg, x_tp(1,i), 'linear','extrap');
+        dR0 = derivative(soc_dischg, R0_dischg, x_tp(1,i),deltaSOC);
     end
     dV_dSOC = derivative(Voc_vs_SOC(:,1), Voc_vs_SOC(:,2), ...
                                 x_tp(1,i),deltaSOC);
@@ -208,10 +201,16 @@ for i = 2:N
     x_t(1,i) = saturate(x_t(1,i),0,1);
     P_t = (eye(length(A)) - L(:,i)*C)*P_tp;
     
+    if I_expt(i) < 0
+        R0 = interp1(soc_chg, R0_chg, x_t(1,i), 'linear','extrap');
+    else
+        R0 = interp1(soc_dischg, R0_dischg, x_t(1,i), 'linear','extrap');
+    end
     Voc = interp1(Voc_vs_SOC(:,1), Voc_vs_SOC(:,2), x_t(1,i), 'linear','extrap');
     Vb(i) = Voc - x_t(2,i) - x_t(3,i) - I_expt(i)*R0;
+    R0_with_time(i) = R0;
 
-    if adaptive
+    if Adaptive
         % Adapt
         d(i) = V_expt(i)-V;
         if length(Vb) < W
@@ -235,7 +234,7 @@ disp(['RMS Error in SOC = ' num2str(prmse_SOC) '%']);
 disp(['RMS Error in voltage = ' num2str(prmse_V) '%']);
 
 cd(rootFolder)
-% save(fileName)
+save(fileName)
 
 figure(); set(gcf,'color','w'); hold on;
 plot(t,V_expt);
@@ -250,7 +249,7 @@ xlabel('Time [s]'); ylabel('SOC [%]')
 legend('Experimental','Kalman')
 
 figure(); set(gcf,'color','w'); hold on;
-plot(t(1:length(Vb)),x_t(4,:))
+plot(t(1:length(Vb)),R0_with_time)
 xlabel('Time [s]'); ylabel('R0')
 
 load handel
