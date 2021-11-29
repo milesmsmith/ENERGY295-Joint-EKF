@@ -32,8 +32,10 @@ data_capacity  = readmatrix('Capacity_Values.xlsx');
 n_vec  = data_capacity(:,1);
 Qn_vec = data_capacity(:,2);
 
+
+cd(strcat(rootFolder,'\Project_2_Data','\HPPC'))
+load('parameters.mat')
 if CaseNo==1 | CaseNo==2 | CaseNo==3 | CaseNo==4
-    cd(strcat(rootFolder,'\Project_2_Data','\HPPC'))
     start_idx = 14476;
 else
     cd(strcat(rootFolder,'\Project_2_Data','\UDDS'))
@@ -64,7 +66,7 @@ switch CaseNo
 %         [R0_chg,R1_chg,C1_chg,R2_chg,C2_chg,prmse_chg] = ...
 %             estimate_parameters_ga(start_chg_idxs, end_chg_idxs,t,V_expt,I_expt,SOC_CC,SOC_map,OCV_map,ub_chg,lb_chg);
 %         ECM_params_ga_chg = [R0_chg,R1_chg,C1_chg,R2_chg,C2_chg];
-% 
+%         
 %         % ---- Discharging ----
 %         %parsing data
 %         [start_dischg_idxs, end_dischg_idxs] = find_discharge_idxs(I_expt,data_padding);
@@ -80,9 +82,11 @@ switch CaseNo
 %             estimate_parameters_ga(start_dischg_idxs, end_dischg_idxs,t,V_expt,I_expt,SOC_CC,SOC_map,OCV_map,ub_disch,lb_disch);
 %         ECM_params_ga_dischg = [R0_dischg,R1_dischg,C1_dischg,R2_dischg,C2_dischg];
 %         
-%         clear t V_expt I_expt SOC_CC
+%         clearvars -except ECM_params_ga_chg R0_chg R1_chg C1_chg R2_chg...
+%             C2_chg ECM_params_ga_dischg R0_dischg R1_dischg C1_dischg...
+%             R2_dischg C2_dischg soc_chg soc_dischg
 %         save('parameters.mat')
-        load('parameters.mat')
+
     case 2
         data = readmatrix('INR21700_M50T_T23_HPPC_N75_W8.xlsx');
         n = n_vec(1);
@@ -94,13 +98,11 @@ switch CaseNo
         n = n_vec(1);
         Qn = Qn_vec(3);
         fileName = 'HPPCresult_N125';
-        load('parameters.mat')
     case 4
         data = readmatrix('INR21700_M50T_T23_HPPC_N200_W8.xlsx');
         n = n_vec(1);
         Qn = Qn_vec(4);
         fileName = 'HPPCresult_N200';
-        load('parameters.mat')
     case 5
         data = readmatrix('INR21700_M50T_T23_UDDS_W8_N1.xlsx');
         n = 1;
@@ -152,16 +154,15 @@ for i = 2:N
         R2 = interp1(soc_chg, R2_chg, x_t(1,i-1), 'linear','extrap');
         C1 = interp1(soc_chg, C1_chg, x_t(1,i-1), 'linear','extrap');
         C2 = interp1(soc_chg, C2_chg, x_t(1,i-1), 'linear','extrap');
-        dR0 = derivative(soc_chg, R0_chg, x_t(1,i-1),deltaSOC);
         dR1 = derivative(soc_chg, R1_chg, x_t(1,i-1),deltaSOC);
         dR2 = derivative(soc_chg, R2_chg, x_t(1,i-1),deltaSOC);
         dC1 = derivative(soc_chg, C1_chg, x_t(1,i-1),deltaSOC);
         dC2 = derivative(soc_chg, C2_chg, x_t(1,i-1),deltaSOC);
     else
-        R1 = interp1(soc_chg, R1_dischg, x_t(1,i-1), 'linear','extrap');
-        R2 = interp1(soc_chg, R2_dischg, x_t(1,i-1), 'linear','extrap');
-        C1 = interp1(soc_chg, C1_dischg, x_t(1,i-1), 'linear','extrap');
-        C2 = interp1(soc_chg, C2_dischg, x_t(1,i-1), 'linear','extrap');
+        R1 = interp1(soc_dischg, R1_dischg, x_t(1,i-1), 'linear','extrap');
+        R2 = interp1(soc_dischg, R2_dischg, x_t(1,i-1), 'linear','extrap');
+        C1 = interp1(soc_dischg, C1_dischg, x_t(1,i-1), 'linear','extrap');
+        C2 = interp1(soc_dischg, C2_dischg, x_t(1,i-1), 'linear','extrap');
         dR1 = derivative(soc_dischg, R1_dischg, x_t(1,i-1),deltaSOC);
         dR2 = derivative(soc_dischg, R2_dischg, x_t(1,i-1),deltaSOC);
         dC1 = derivative(soc_dischg, C1_dischg, x_t(1,i-1),deltaSOC);
@@ -221,8 +222,8 @@ prmse_V = calc_percent_rmse(V_expt,Vb);
 disp(['RMS Error in SOC = ' num2str(prmse_SOC) '%']);
 disp(['RMS Error in voltage = ' num2str(prmse_V) '%']);
 
-cd(rootFolder)
-% save(fileName)
+cd(strcat(rootFolder,'\Results files'))
+save(fileName)
 
 figure(); set(gcf,'color','w'); hold on;
 plot(t,V_expt);
