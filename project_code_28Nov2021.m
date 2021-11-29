@@ -222,7 +222,7 @@ prmse_V = calc_percent_rmse(V_expt,Vb);
 disp(['RMS Error in SOC = ' num2str(prmse_SOC) '%']);
 disp(['RMS Error in voltage = ' num2str(prmse_V) '%']);
 
-cd(strcat(rootFolder,'\Results files'))
+cd(strcat(rootFolder))%,'\Results files'))
 save(fileName)
 
 figure(); set(gcf,'color','w'); hold on;

@@ -156,15 +156,15 @@ function [x_t,Vb,L] = EKF(dt,V_expt,I_expt,x_t,P_t,Q,R,R0_chg,R0_dischg,R0_disch
         P_tp = A*P_t*A' + Q;
         
         % Correct
-        if I_expt(i-1) < 0
-            R0 = derivative(soc_chg, R0_chg, x_tp(1,i),deltaSOC);
+        if I_expt(i) < 0
+            R0 = interp1(soc_chg, R0_chg, x_tp(1,i), 'linear','extrap');
             dR0 = derivative(soc_chg, R0_chg, x_tp(1,i),deltaSOC);
         else
-            if I_expt(i-1)>=4
-                R0 = derivative(soc_dischg, R0_dischg_4A, x_tp(1,i),deltaSOC);
+            if I_expt(i)>=4
+                R0 = interp1(soc_dischg, R0_dischg_4A, x_tp(1,i), 'linear','extrap');
                 dR0 = derivative(soc_dischg, R0_dischg_4A, x_tp(1,i),deltaSOC);
             else
-                R0 = derivative(soc_dischg, R0_dischg, x_tp(1,i),deltaSOC);
+                R0 = interp1(soc_dischg, R0_dischg, x_tp(1,i), 'linear','extrap');
                 dR0 = derivative(soc_dischg, R0_dischg, x_tp(1,i),deltaSOC);
             end
         end
@@ -180,13 +180,13 @@ function [x_t,Vb,L] = EKF(dt,V_expt,I_expt,x_t,P_t,Q,R,R0_chg,R0_dischg,R0_disch
         P_t = (eye(length(A)) - L(:,i)*C)*P_tp;
         
 
-        if I_expt(i-1) < 0
-            R0 = derivative(soc_chg, R0_chg, x_t(1,i),deltaSOC);
+        if I_expt(i) < 0
+            R0 = interp1(soc_chg, R0_chg, x_t(1,i), 'linear','extrap');
         else
-            if I_expt(i-1)>=4
-                R0 = derivative(soc_dischg, R0_dischg_4A, x_t(1,i),deltaSOC);
+            if I_expt(i)>=4
+                R0 = interp1(soc_dischg, R0_dischg_4A, x_t(1,i), 'linear','extrap');
             else
-                R0 = derivative(soc_dischg, R0_dischg, x_t(1,i),deltaSOC);
+                R0 = interp1(soc_dischg, R0_dischg, x_t(1,i), 'linear','extrap');
             end
         end
         Voc = interp1(Voc_vs_SOC(:,1), Voc_vs_SOC(:,2), x_t(1,i), 'linear','extrap');
