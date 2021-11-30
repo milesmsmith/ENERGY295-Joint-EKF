@@ -22,8 +22,6 @@ SOC_Coulomb_Counting = SOC0 - (cumtrapz(t, I)/3600)/Qn;
 
 %Making the Voltage measured input to EKF the simulated voltage (using differential equations)
 [V,V1,V2,percent_rmse_Vb] = simulate(R0_chg,R0_dischg,R0_dischg_4A,R1_chg,R1_dischg,C1_chg,C1_dischg,R2_chg,R2_dischg,C2_chg,C2_dischg,soc_chg,soc_dischg,I,V,t,Qn,SOC0,OCV_map,SOC_map);
-% Should this be V or Vb? Maybe it is V...?
-
 
 %Initial guess of mu and S
 
@@ -259,10 +257,12 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
         % mean: mu_k|k
         Voc = interp1(SOC_map,OCV_map,mu_predict(1),'linear','extrap'); % Estimate OCV through interpolation 
         mu(:,k) = mu_predict + K(:,k)*(V(k) - (Voc - mu_predict(2) - mu_predict(3) - I(k)*R0)); %Evaluate at mu_k|k-1
-        % Are we sure this line is correct?
+        % Prediction Step[3x1] + Gain[3x1] * (Measured voltage - Vb)[1x1]
+        
         %constraining SOC
         mu(1,k) = saturate(mu(1,k),0,1);
         %covariance: S_k|k
+        %S(:,:,k) = (eye(length(C)) - K(:,k)*C)*S_predict;
         S(:,:,k) = S_predict - K(:,k)*C*S_predict; %Evaluate at S_k|k-1,Ck
         %Finding 
         Voc = interp1(SOC_map,OCV_map,mu(1,k),'linear','extrap');
@@ -277,7 +277,7 @@ function [mu,S,Vb,K] = EKF_SOC_V1_V2(t,V,I,mu0,S0,Q,R,R0_chg,R0_dischg,R0_dischg
         end
         Vb(k) = Voc - mu(2,k) - mu(3,k) - I(k)*R0; 
         
-        dV = (Vb(k) - V(k))*10^9; % (units: uV)
+        dV = (Vb(k) - V(k))*10^9; % (units: nV)
         
     end
 end
