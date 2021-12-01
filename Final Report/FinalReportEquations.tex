@@ -61,7 +61,127 @@ and applying a general state-space representation to the system, such that
 y(t) =  Cx(t) + Du(t)
 \end{equation}
 
-where
+In this model, we initially do not consider $R_0$ as a state variable that responds to system noise.  Rather it is considered to be a pure function of SOC, so our state vectors are considered to be 
+
+\begin{equation}
+\centering 
+x(t) =
+\begin{bmatrix}
+SOC \\ V_1 \\ V_2 
+\end{bmatrix}
+\end{equation}
+
+thus, our equations of state are 
+
+\begin{equation}
+\centering
+\dot{x}(t) = \;
+\begin{bmatrix}
+\dot{SOC} (t) \\
+\dot{V_1} (t) \\
+\dot{V_2} (t) \\
+\end{bmatrix} 
+= \;
+\begin{bmatrix}
+\frac{-I(t)}{Q_n} \\
+\frac{-1}{R_1(SOC(t))C_1(SOC(t))}V_1(t) + \frac{1}{C_1(SOC(t))}I(t) \\
+\frac{-1}{R_2(SOC(t))C_2(SOC(t))}V_2(t) + \frac{1}{C_2(SOC(t))}I(t) 
+\end{bmatrix}
+\end{equation}
+
+Thus our coefficient matrices, A, B, C, and D, can be defined as 
+
+\begin{equation}
+\centering
+\begin{matrix}
+A = \;
+\begin{bmatrix}
+0 & 0 & 0  \\
+0 & \frac{-1}{R_1(SOC(t))C_1(SOC(t))} & 0  \\
+0 & 0 & \frac{-1}{R_2(SOC(t))C_2(SOC(t))}  \\
+0 & 0 & 0 \\
+\end{bmatrix} 
+
+& 
+
+B = 
+\begin{bmatrix}
+\frac{-1}{Q_n} \\
+\frac{1}{C_1} \\
+\frac{1}{C_2} \\
+\end{bmatrix}
+
+\\
+
+C = \begin{bmatrix}
+
+(\frac{\partial{V_OC}}{\partial{SOC}} - \frac{\partial{R_0}}{\partial{SOC}}I(t)) & -1 & -1
+
+\end{bmatrix}^*
+
+&
+
+D = \begin{bmatrix}
+\bold{0}
+\end{bmatrix}
+\end{matrix}
+\end{equation}
+
+\par
+Assuming there is some sort of process noise in the state vector $\dot{x}$ and observation noise at time instance k that are both Gaussian in their distribution with a mean of 0, the discrete time linear system can be described as 
+
+\begin{equation}
+\centering
+\begin{matrix}
+x(k) = Ax(k-1) + Bu(k-1) + w &&
+y(k) = Cx(k) + \nu
+\end{matrix}
+\end{equation} 
+
+The covariance of $w$ is defined as $Q$ and the covariance of $\nu$ is defined as R.  By applying the Jacobian to linearize the coefficient matrices, we get the matrices in their discrete form, such that
+
+\begin{equation}
+\centering
+\begin{matrix}
+A_k = \:
+\begin{bmatrix}
+0 & 0 & 0 \\
+\frac{C_1\frac{\partial{R_2}}{\partial{SOC}} + R_1\frac{\partial{C_1}}{\partial{SOC}}}{(R_1C_1)^2} & \frac{-1}{R_1C_1} & 0 \\
+\frac{C_2\frac{\partial{R_2}}{\partial{SOC}} + R_2\frac{\partial{C_2}}{\partial{SOC}}}{(R_2C_2)^2} & 0 & \frac{-1}{R_1C_1}\\
+\end{bmatrix}
+& B_k = 
+\begin{bmatrix}
+\frac{-1}{Q_n} \\
+\frac{1}{C_1} \\
+\frac{1}{C_2} 
+\end{bmatrix} \\ \\
+C_k = 
+\begin{bmatrix}
+(\frac{\partial{V_OC}}{\partial{SOC}} - \frac{\partial{R_0}}{\partial{SOC}}I(t)) & -1 & -1
+\end{bmatrix} &
+
+D_k = 
+\begin{bmatrix}
+\bf{0}
+\end{bmatrix}
+\end{matrix}
+\end{equation}
+
+the system can be now be considered using linear modeling techniques. 
+
+\subsection{Considering R$_0$ as a state variable}
+
+\par
+Expanding on the previous system, R$_0$ can be considered as a state variable that adapts based on the observation and process noise of the system. The new state vector of the system now is considered to be 
+
+\begin{equation}
+\centering x(t) =
+\begin{bmatrix}
+SOC \\ V_1 \\ V_2 \\ R_0
+\end{bmatrix}
+\end{equation}
+
+with state variables that are defined as 
 
 \begin{equation}
 \centering
@@ -81,50 +201,43 @@ where
 \end{bmatrix}
 \end{equation}
 
-and our state vector, x(t) can be described as 
-
-\begin{equation}
-\centering x(t) =
-\begin{bmatrix}
-SOC \\ V_1 \\ V_2 \\ R_0
-\end{bmatrix}
-\end{equation}
-
-thus,
+The non-linear coefficients matrices are defined as, 
 
 \begin{equation}
 \centering
+\begin{matrix}
 A = \;
 \begin{bmatrix}
 0 & 0 & 0 & 0 \\
 0 & \frac{-1}{R_1(SOC(t))C_1(SOC(t))} & 0 & 0 \\
 0 & 0 & \frac{-1}{R_2(SOC(t))C_2(SOC(t))} & 0 \\
 0 & 0 & 0 & 0 \\
-\end{bmatrix} \:
-B = \;
+\end{bmatrix} 
+&
+B = 
 \begin{bmatrix}
 \frac{-1}{Q_n} \\
 \frac{1}{C_1} \\
 \frac{1}{C_2} \\
-0 \\
+0
+\end{bmatrix} 
+
+\\ \\
+
+C =
+\begin{bmatrix}
+(\frac{\partial{V_OC}}{\partial{SOC}} - \frac{\partial{R_0}}{\partial{SOC}}I(t)) & -1 & -1 & -I(t) 
+\end{bmatrix}^* &
+
+D = 
+\begin{bmatrix}
+\bf{0}
 \end{bmatrix}
+
+\end{matrix}
 \end{equation}
 
-\par
-Assuming there is some sort of process noise in the state vector $\dot{x}$ and observation noise  at at time instance k that are both Gaussian in their distribution with a mean of 0, the discrete time linear system can be described as 
-
-\begin{equation}
-\centering
-\begin{matrix}
-x(k) = Ax(k-1) + Bu(k-1) + w &&
-y(k) = Cx(k) + \nu
-\end{matrix}
-\end{equation} 
-
-The covariance of $w$ is defined as $Q$ and the covariance of $\nu$ is defined as R.
-
-\par
-By applying the Jacobian to linearize the system dynamics and measure the , the linearized matrices are developed 
+By applying the Jacobian to linearize the system dynamics, the discretized coefficient matrices are developed for each time-instance k
 
 \begin{equation}
 \centering
@@ -142,7 +255,10 @@ A_k = \:
 \frac{1}{C_1} \\
 \frac{1}{C_2} \\
 0 \\
-\end{bmatrix} \\ \\
+\end{bmatrix} 
+
+\\ \\
+
 C_k = 
 \begin{bmatrix}
 (\frac{\partial{V_OC}}{\partial{SOC}} - \frac{\partial{R_0}}{\partial{SOC}}I(t)) & -1 & -1 & -I(t) 
@@ -255,6 +371,20 @@ d_{i,k}= y_k - \hat{y}_{k|k-1}
 \begin{equation}
 i_0 = k - N + 1
 \end{equation}
+
+which gives a noise covariance matrix, $Q$, that adapts for each time step based on the previous N time instances. 
+
+\section{System Performance}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{SOC plots.png}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{R0 plots.png}
+\end{figure}
 
 
 

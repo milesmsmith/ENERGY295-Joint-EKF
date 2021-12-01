@@ -8,7 +8,7 @@ CaseNo = input(prompt);
 
 data_padding = 20;
 
-cd(strcat(rootFolder,'\Project_2_Data'))
+cd(strcat(rootFolder,'/Project_2_Data'))
 data = readmatrix('INR21700_M50T_T23_OCV_W8.xlsx');
 t = data(:,2);
 Voc_vs_SOC(:,2) = data(:,3);
@@ -33,12 +33,12 @@ n_vec  = data_capacity(:,1);
 Qn_vec = data_capacity(:,2);
 
 
-cd(strcat(rootFolder,'\Project_2_Data','\HPPC'))
+cd(strcat(rootFolder,'/Project_2_Data','/HPPC'))
 load('parameters.mat')
 if CaseNo==1 | CaseNo==2 | CaseNo==3 | CaseNo==4
     start_idx = 14476;
 else
-    cd(strcat(rootFolder,'\Project_2_Data','\UDDS'))
+    cd(strcat(rootFolder,'/Project_2_Data','/UDDS'))
 end
 switch CaseNo
     case 1

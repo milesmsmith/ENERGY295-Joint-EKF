@@ -52,6 +52,6 @@ plot(t,x_t(4,:),'DisplayName','N=200')
 title('HPPC'); xlabel('Time [s]'); ylabel('R_0'); legend('show')
 
 subplot(2,1,2); hold on
-load('UDDSresult_N200')
+load('UDDSresult_N201')
 plot(t,x_t(4,:))
 title('UDDS'); xlabel('Time [s]'); ylabel('R_0');
