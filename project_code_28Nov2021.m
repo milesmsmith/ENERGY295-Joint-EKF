@@ -46,7 +46,7 @@ switch CaseNo
         n = n_vec(1);
         Qn = Qn_vec(1);
         fileName = 'HPPCresult_N0';
-        
+% uncomment to find ECM params        
 %         t = data(:,2);
 %         V_expt = data(:,3);
 %         I_expt = -data(:,4);
@@ -172,7 +172,7 @@ for i = 2:N
     A = [0                                                                ,  0             ,  0             ,  0; ...
          ( x_t(2,i-1)*(R1*dC1 + C1*dR1)/(R1*C1)^2 - I_expt(i-1)*dC1/C1^2 ),  ( -1/(R1*C1) ),  0             ,  0;
          ( x_t(3,i-1)*(R2*dC2 + C2*dR2)/(R2*C2)^2 - I_expt(i-1)*dC2/C2^2 ),  0             ,  ( -1/(R2*C2) ),  0;
-         0                                                                ,  0             ,  0             ,  1];
+         0                                                                ,  0             ,  0             ,  0];
     B = [-1/(3600*Qn); 1/C1; 1/C2; 0];
 
     % Predict
